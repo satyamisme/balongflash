@@ -1,0 +1,62 @@
+name: Build and Release balong_flash # Name of your workflow - will be displayed in GitHub Actions
+
+on:
+  push:
+    branches: [ "main" ] # Trigger workflow on code push to the 'main' branch
+  pull_request:
+    branches: [ "main" ] # Trigger workflow on pull requests against the 'main' branch
+  workflow_dispatch: # Enable manual triggering of the workflow from GitHub UI
+
+jobs: # Define the jobs that will run in this workflow
+  build: # Define a job named 'build'
+    runs-on: ubuntu-latest # Specify that this job will run on an Ubuntu Linux runner
+
+    steps: # Define the steps to be executed within the 'build' job
+      - name: Checkout code # Step 1: Checkout your repository code
+        uses: actions/checkout@v4 # Uses the official 'checkout' action to get your code onto the runner
+
+      - name: Build using Make # Step 2: Compile your C programs using 'make'
+        run: make balong_flash # Executes the command 'make balong_flash' in the runner's shell. This uses your Makefile.
+        # Assuming your Makefile has a target 'balong_flash' to build the executable.
+        # If 'all' target builds balong_flash, you can use 'make all' instead.
+
+      - name: Zip Binary for Release # Step 3: Create a ZIP archive of the compiled binary
+        run: | # 'run: |' allows multi-line shell commands
+          zip balong_flash.zip balong_flash
+          # This command creates a ZIP file named 'balong_flash.zip'
+          # and adds the compiled executable (balong_flash) to it.
+          # IMPORTANT: This step MUST come BEFORE uploading the release asset!
+
+      - name: Upload binary as artifacts # Step 4: (Optional but Recommended) Upload binary as workflow artifact
+        uses: actions/upload-artifact@v4 # Uses the official 'upload-artifact' action
+        with:
+          name: balong_flash-binary # Name of the artifact (can be anything)
+          path: balong_flash # Files to include in the artifact
+          # Artifacts are useful for storing build outputs temporarily and can be downloaded from the workflow run summary.
+          # This is separate from creating a release, but good practice for CI/CD.
+
+      - name: Create Release # Step 5: Create a GitHub Release
+        id: create_release # Give this step an ID so we can refer to its output later
+        uses: actions/create-release@v1 # Uses the 'create-release' action
+        env: # Environment variables for this step
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Pass the GitHub token for authentication
+        with: # Configuration for the 'create-release' action
+          tag_name: v${{ github.run_number }} # Tag name for the release (e.g., v1, v2, based on workflow run number)
+          release_name: Release v${{ github.run_number }} # Display name for the release
+          body: | # Description for the release
+            Automated release of compiled binary 'balong_flash' from workflow run #${{ github.run_number }}.
+            See workflow run logs for details.
+          draft: false # Set to 'false' to publish the release immediately (not as a draft)
+          prerelease: false # Set to 'false' to make it a stable release (not a pre-release)
+
+      - name: Upload Release Asset # Step 6: Upload the ZIP file as a Release Asset
+        uses: actions/upload-release-asset@v1 # Uses the 'upload-release-asset' action
+        env: # Environment variables for this step
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Pass the GitHub token for authentication
+        with: # Configuration for the 'upload-release-asset' action
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # Get the upload URL from the 'Create Release' step (using its ID)
+          asset_path: balong_flash.zip # Path to the ZIP file we created in Step 3
+          asset_name: balong_flash.zip # Filename for the asset in the release (how it will be downloaded)
+          asset_content_type: application/zip # MIME type of the asset (ZIP file)
+
+# END OF WORKFLOW DEFINITION
